@@ -1,0 +1,74 @@
+name: Extract Project ZIP
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        run: |
+          python - <<'PY'
+          import zipfile
+          import os
+          import shutil
+          import glob
+
+          zips = glob.glob("*.zip")
+
+          if not zips:
+              print("Tidak ada file ZIP.")
+              raise SystemExit(0)
+
+          zip_file = zips[0]
+          temp_dir = "/tmp/project"
+
+          os.makedirs(temp_dir, exist_ok=True)
+
+          with zipfile.ZipFile(zip_file, "r") as z:
+              z.extractall(temp_dir)
+
+          entries = os.listdir(temp_dir)
+
+          if len(entries) == 1 and os.path.isdir(os.path.join(temp_dir, entries[0])):
+              source = os.path.join(temp_dir, entries[0])
+          else:
+              source = temp_dir
+
+          for item in os.listdir(source):
+              src = os.path.join(source, item)
+              dst = os.path.join(".", item)
+
+              if item == ".git":
+                  continue
+
+              if os.path.exists(dst):
+                  if os.path.isdir(dst):
+                      shutil.copytree(src, dst, dirs_exist_ok=True)
+                  else:
+                      shutil.copy2(src, dst)
+              else:
+                  shutil.move(src, dst)
+
+          os.remove(zip_file)
+          print("ZIP berhasil diekstrak dan dihapus.")
+          PY
+
+      - name: Commit extracted project
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "Extract Dompet Dzaky project"
+          git push
